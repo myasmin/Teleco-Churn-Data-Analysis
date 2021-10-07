@@ -1,323 +1,267 @@
-{
-  "nbformat": 4,
-  "nbformat_minor": 0,
-  "metadata": {
-    "colab": {
-      "name": "Untitled0.ipynb",
-      "provenance": [],
-      "authorship_tag": "ABX9TyPHSAJd+huiLSHn5IdZ5xo4",
-      "include_colab_link": true
-    },
-    "kernelspec": {
-      "name": "ir",
-      "display_name": "R"
-    },
-    "language_info": {
-      "name": "R"
-    }
-  },
-  "cells": [
-    {
-      "cell_type": "markdown",
-      "metadata": {
-        "id": "view-in-github",
-        "colab_type": "text"
-      },
-      "source": [
-        "<a href=\"https://colab.research.google.com/github/myasmin/Teleco-Churn-Data-Analysis/blob/main/R%20Script%20for%20ML%20Model%20Development%20using%20Tidymodels\" target=\"_parent\"><img src=\"https://colab.research.google.com/assets/colab-badge.svg\" alt=\"Open In Colab\"/></a>"
-      ]
-    },
-    {
-      "cell_type": "code",
-      "metadata": {
-        "colab": {
-          "base_uri": "https://localhost:8080/",
-          "height": 129
-        },
-        "id": "eZWXEDmHeNZk",
-        "outputId": "15af643e-5463-4349-fc3c-eb11360b4493"
-      },
-      "source": [
-        "#################### Start Project ####################\n",
-        "\n",
-        "rm(list=ls())\n",
-        "\n",
-        "#################### Get Libraries ####################\n",
-        "\n",
-        "library(tidymodels)\n",
-        "library(tidyverse)\n",
-        "library(workflows)\n",
-        "library(tune)\n",
-        "library(corrplot)\n",
-        "library(clickR)\n",
-        "\n",
-        "#################### Get the Dataset ####################\n",
-        "\n",
-        "churndata<-read.csv(\"Telco_customer_churn.csv\")\n",
-        "\n",
-        "#################### Know the Dataset ####################\n",
-        "\n",
-        "head(churndata)\n",
-        "names(churndata)\n",
-        "str(churndata)\n",
-        "descriptive(churndata)\n",
-        "\n",
-        "#################### Data Cleaning and Manupulation ####################\n",
-        "\n",
-        "######### Drop Null Values #########\n",
-        "\n",
-        "churndata<- churndata %>%\n",
-        "            drop_na(Total.Charges)\n",
-        "\n",
-        "######### Transform Variables #########\n",
-        "\n",
-        "churndata$Churn.Value<-as.character(churndata$Churn.Value)\n",
-        "\n",
-        "summary(churndata)\n",
-        "\n",
-        "#################### Find Correlation among Numeric variables ####################\n",
-        "\n",
-        "par(mfrow=c(2,5))\n",
-        "hist(churndata$Tenure.Months,main=\"\",xlab=\"Tenure Months\")\n",
-        "hist(churndata$Monthly.Charges,main=\"\",xlab=\"Monthly Charges\")\n",
-        "hist(churndata$Total.Charges,main=\"\",xlab=\"Total Charges\")\n",
-        "hist(churndata$Churn.Score,main=\"\",xlab=\"Churn Score\")\n",
-        "hist(churndata$CLTV,main=\"\",xlab=\"CLTV\")\n",
-        "boxplot(churndata$Tenure.Months, horizontal=TRUE)\n",
-        "boxplot(churndata$Monthly.Charges, horizontal=TRUE)\n",
-        "boxplot(churndata$Total.Charges, horizontal=TRUE)\n",
-        "boxplot(churndata$Churn.Score, horizontal=TRUE)\n",
-        "boxplot(churndata$CLTV,horizontal=TRUE)\n",
-        "\n",
-        "cordata<- churndata %>%\n",
-        "            select(Tenure.Months,Monthly.Charges,Total.Charges,Churn.Score,CLTV)\n",
-        "cormat <-cor(cordata)\n",
-        "cormat\n",
-        "corrplot(cormat,method=\"circle\",order=\"hclust\",type=\"upper\")\n",
-        "\n",
-        "rm(list=c(\"cordata\",\"cormat\"))\n",
-        "\n",
-        "\n",
-        "#################### Machine learning model development ####################\n",
-        "\n",
-        "#### **** this is an imbalanced two class classification project**** ####\n",
-        "######### Copy the Dataset for Model Development #########\n",
-        "\n",
-        "churndata2 <- churndata %>%  \n",
-        "              subset(select= -c(1:9,ncol(churndata)))\n",
-        "descriptive(churndata2)\n",
-        "\n",
-        "######### Implementation of Stratification  #########\n",
-        "\n",
-        "churndata2 %>% \n",
-        "  count(Churn.Label) %>% \n",
-        "  mutate (prop = n/sum(n))\n",
-        "\n",
-        "# Splitting the Data for Train and Test considering Stratification\n",
-        "\n",
-        "data_split<- initial_split(churndata2, strata=Churn.Value) \n",
-        "\n",
-        "str(data_split) # Overview of the Split\n",
-        "\n",
-        "churn_train <- training(data_split) # TRAIN SET\n",
-        "churn_test  <- testing(data_split)  # TEST SET\n",
-        "\n",
-        "# Check the Percentage after Stratification in Train and Test Data\n",
-        "\n",
-        "nrow(churn_train)/nrow(churndata2)\n",
-        "churn_train %>% \n",
-        "  count(Churn.Value) %>% \n",
-        "  mutate(prop = n/sum(n))\n",
-        "churn_test %>% \n",
-        "  count(Churn.Value) %>% \n",
-        "  mutate(prop = n/sum(n))\n",
-        "\n",
-        "# Cross Validation Calculation\n",
-        "\n",
-        "churn_cv <-  vfold_cv(churn_train, strata = Churn.Value)\n",
-        "\n",
-        "######## Start Model Developing ########\n",
-        "\n",
-        "######## Create the RECIPE including the steps ########\n",
-        "\n",
-        "churn_recipe<- churndata2 %>%\n",
-        "  recipe (Churn.Value ~ .)%>%\n",
-        "  step_corr(all_numeric_predictors())%>%\n",
-        "  step_center(all_numeric_predictors())\n",
-        "\n",
-        "######## Preprocess the Train Model ########\n",
-        "\n",
-        "churn_train_preprocess<-churn_recipe %>%\n",
-        "                        prep(churn_train) %>%\n",
-        "                        juice()\n",
-        "churn_train_preprocess\n",
-        "\n",
-        "\n",
-        "\n",
-        "############### Specify the Different Models ###############\n",
-        "\n",
-        "\n",
-        "#### LOGISTIC REGRESSION MODEL ####\n",
-        "\n",
-        "logistic_spec <-                  # model specification\n",
-        "  logistic_reg() %>%              # model type\n",
-        "  set_engine(engine = \"glm\") %>%  # model engine\n",
-        "  set_mode(\"classification\")      # model mode\n",
-        "\n",
-        "logistic_spec                     # Show model specification\n",
-        "\n",
-        "#### RANDOM FOREST MODEL ####\n",
-        "\n",
-        "library(ranger)\n",
-        "\n",
-        "rndmfrst_spec <- \n",
-        "  rand_forest() %>% \n",
-        "  set_engine(\"ranger\", importance = \"impurity\") %>% \n",
-        "  set_mode(\"classification\")\n",
-        "\n",
-        "rndmfrst_spec\n",
-        "\n",
-        "#### BOOSTED TREE(XGBOOST) MODEL ####\n",
-        "\n",
-        "library(xgboost)\n",
-        "xgb_spec <- \n",
-        "  boost_tree() %>% \n",
-        "  set_engine(\"xgboost\") %>% \n",
-        "  set_mode(\"classification\") \n",
-        "xgb_spec\n",
-        "\n",
-        "#### K NEAREST NEIGHBOUR MODEL ####\n",
-        "\n",
-        "knn_spec <- \n",
-        "  nearest_neighbor(neighbors = 4) %>% # we can adjust the number of neighbors \n",
-        "  set_engine(\"kknn\") %>% \n",
-        "  set_mode(\"classification\") \n",
-        "knn_spec\n",
-        "\n",
-        "#### NEURAL NETWORK MODEL #####\n",
-        "\n",
-        "library(keras)\n",
-        "nnet_spec<-\n",
-        "  mlp() %>%\n",
-        "  set_mode(\"classification\") %>% \n",
-        "  set_engine(\"keras\", verbose = 0) \n",
-        "nnet_spec\n",
-        "\n",
-        "\n",
-        "\n",
-        "############### Create Workflow ###############\n",
-        "\n",
-        "\n",
-        "\n",
-        "\n",
-        "#### Logistic Regression Workflow ####\n",
-        "\n",
-        "logistic_wflow <-               # Logistic workflow object\n",
-        "  workflow() %>%                # use workflow function\n",
-        "  add_recipe(churn_recipe) %>%  # use the new recipe\n",
-        "  add_model(logistic_spec)      # add logistic model spec\n",
-        "\n",
-        "# show object\n",
-        "logistic_wflow\n",
-        "\n",
-        "######## Random Forest Workflow  #########\n",
-        "\n",
-        "rndmfrst_wflow <-                # Random Forest workflow object\n",
-        "  workflow() %>%                # use workflow function\n",
-        "  add_recipe(churn_recipe) %>%  # use the new recipe\n",
-        "  add_model(rndmfrst_spec)      # add Random Forest model spec\n",
-        "rndmfrst_wflow\n",
-        "\n",
-        "######## Boosted Tree (XGBOOST) Workflow #########\n",
-        "\n",
-        "xgb_wflow <-                     # Boosted Tree workflow object\n",
-        "  workflow() %>%                # use workflow function\n",
-        "  add_recipe(churn_recipe) %>%  # use the new recipe\n",
-        "  add_model(xgb_spec)           # add Boosted Tree model spec\n",
-        "xgb_wflow\n",
-        "\n",
-        "######## K NEAREST NEIGHBOUR Workflow  #########\n",
-        "\n",
-        "knn_wflow <-                     # Knn workflow object\n",
-        "  workflow() %>%                # use workflow function\n",
-        "  add_recipe(churn_recipe) %>%  # use the new recipe\n",
-        "  add_model(knn_spec)           # add Knn model spec\n",
-        "knn_wflow\n",
-        "\n",
-        "######## Neural Network Workflow  #########\n",
-        "\n",
-        "nnet_wflow <-                   # Neural Network workflow object\n",
-        "  workflow() %>%                # use workflow function\n",
-        "  add_recipe(churn_recipe) %>%  # use the new recipe\n",
-        "  add_model(nnet_spec)          # add Knn model spec\n",
-        "nnet_wflow\n",
-        "\n",
-        "\n",
-        "\n",
-        "############### Evaluation of the Models ###############\n",
-        "\n",
-        "# Write a Function to extract the results from the performance metrics\n",
-        "\n",
-        "######## Logistic model Evaluation #########\n",
-        "\n",
-        "get_model <- function(x) {\n",
-        "                          pull_workflow_fit(x) %>% \n",
-        "                          tidy()\n",
-        "                         }\n",
-        "\n",
-        "logistic_result <- \n",
-        "  logistic_wflow %>% \n",
-        "  fit_resamples(\n",
-        "                resamples = churn_cv,       # Cross Validation\n",
-        "                metrics = metric_set(recall, precision, f_meas,accuracy,kap,roc_auc,yardstick::sens,yardstick::spec ),\n",
-        "                control = control_resamples(\n",
-        "                save_pred = TRUE,\n",
-        "                extract = get_model)\n",
-        "                ) \n",
-        "logistic_result %>%  collect_metrics(summarize = TRUE)\n",
-        "logistic_result %>%  collect_metrics(summarize = FALSE)\n",
-        "\n",
-        "logistic_result$.extracts[[1]][[1]]\n",
-        "all_coef <- map_dfr(logistic_result$.extracts, ~ .x[[1]][[1]])\n",
-        "filter(all_coef, term == \"Monthly.Charges\")\n",
-        "\n",
-        "logistic_pred <- logistic_result %>%\n",
-        "                 collect_predictions()\n",
-        "\n",
-        "logistic_pred %>% \n",
-        "  conf_mat(Churn.Value, .pred_class)%>% \n",
-        "  autoplot(type = \"heatmap\")\n",
-        "\n",
-        "logistic_pred %>% \n",
-        "  group_by(id) %>% # id contains our folds\n",
-        "  roc_curve(Churn.Value,.pred_class) %>% \n",
-        "  autoplot()\n",
-        "\n",
-        "\n",
-        "\n",
-        "# log_res_2 <- \n",
-        "#   log_wflow %>% \n",
-        "#   fit_resamples(\n",
-        "#                 resamples = cv_folds, \n",
-        "#                 metrics = metric_set(\n",
-        "#                                      recall, precision, f_meas,accuracy,kap,roc_auc, sens, spec),\n",
-        "#                 control = control_resamples(\n",
-        "#                 save_pred = TRUE,\n",
-        "#                 extract = get_model) # use extract and our new function\n",
-        "#   ) \n"
-      ],
-      "execution_count": 1,
-      "outputs": [
-        {
-          "output_type": "error",
-          "ename": "ERROR",
-          "evalue": "ignored",
-          "traceback": [
-            "Error in library(tidymodels): there is no package called ‘tidymodels’\nTraceback:\n",
-            "1. library(tidymodels)"
-          ]
-        }
-      ]
-    }
-  ]
-}
+#################### Start Project ####################
+
+rm(list=ls())
+
+#################### Get Libraries ####################
+
+library(tidymodels)
+library(tidyverse)
+library(workflows)
+library(tune)
+library(corrplot)
+library(clickR)
+
+#################### Get the Dataset ####################
+
+churndata<-read.csv("Telco_customer_churn.csv")
+
+#################### Know the Dataset ####################
+
+head(churndata)
+names(churndata)
+str(churndata)
+descriptive(churndata)
+
+#################### Data Cleaning and Manupulation ####################
+
+######### Drop Null Values #########
+
+churndata<- churndata %>%
+            drop_na(Total.Charges)
+
+######### Transform Variables #########
+
+churndata$Churn.Value<-as.character(churndata$Churn.Value)
+
+summary(churndata)
+
+#################### Find Correlation among Numeric variables ####################
+
+par(mfrow=c(2,5))
+hist(churndata$Tenure.Months,main="",xlab="Tenure Months")
+hist(churndata$Monthly.Charges,main="",xlab="Monthly Charges")
+hist(churndata$Total.Charges,main="",xlab="Total Charges")
+hist(churndata$Churn.Score,main="",xlab="Churn Score")
+hist(churndata$CLTV,main="",xlab="CLTV")
+boxplot(churndata$Tenure.Months, horizontal=TRUE)
+boxplot(churndata$Monthly.Charges, horizontal=TRUE)
+boxplot(churndata$Total.Charges, horizontal=TRUE)
+boxplot(churndata$Churn.Score, horizontal=TRUE)
+boxplot(churndata$CLTV,horizontal=TRUE)
+
+cordata<- churndata %>%
+            select(Tenure.Months,Monthly.Charges,Total.Charges,Churn.Score,CLTV)
+cormat <-cor(cordata)
+cormat
+corrplot(cormat,method="circle",order="hclust",type="upper")
+
+rm(list=c("cordata","cormat"))
+
+
+#################### Machine learning model development ####################
+
+#### **** this is an imbalanced two class classification project**** ####
+######### Copy the Dataset for Model Development #########
+
+churndata2 <- churndata %>%  
+              subset(select= -c(1:9,ncol(churndata)))
+descriptive(churndata2)
+
+######### Implementation of Stratification  #########
+
+churndata2 %>% 
+  count(Churn.Label) %>% 
+  mutate (prop = n/sum(n))
+
+# Splitting the Data for Train and Test considering Stratification
+
+data_split<- initial_split(churndata2, strata=Churn.Value) 
+
+str(data_split) # Overview of the Split
+
+churn_train <- training(data_split) # TRAIN SET
+churn_test  <- testing(data_split)  # TEST SET
+
+# Check the Percentage after Stratification in Train and Test Data
+
+nrow(churn_train)/nrow(churndata2)
+churn_train %>% 
+  count(Churn.Value) %>% 
+  mutate(prop = n/sum(n))
+churn_test %>% 
+  count(Churn.Value) %>% 
+  mutate(prop = n/sum(n))
+
+# Cross Validation Calculation
+
+churn_cv <-  vfold_cv(churn_train, strata = Churn.Value)
+
+######## Start Model Developing ########
+
+######## Create the RECIPE including the steps ########
+
+churn_recipe<- churndata2 %>%
+  recipe (Churn.Value ~ .)%>%
+  step_corr(all_numeric_predictors())%>%
+  step_center(all_numeric_predictors())
+
+######## Preprocess the Train Model ########
+
+churn_train_preprocess<-churn_recipe %>%
+                        prep(churn_train) %>%
+                        juice()
+churn_train_preprocess
+
+
+
+############### Specify the Different Models ###############
+
+
+#### LOGISTIC REGRESSION MODEL ####
+
+logistic_spec <-                  # model specification
+  logistic_reg() %>%              # model type
+  set_engine(engine = "glm") %>%  # model engine
+  set_mode("classification")      # model mode
+
+logistic_spec                     # Show model specification
+
+#### RANDOM FOREST MODEL ####
+
+library(ranger)
+
+rndmfrst_spec <- 
+  rand_forest() %>% 
+  set_engine("ranger", importance = "impurity") %>% 
+  set_mode("classification")
+
+rndmfrst_spec
+
+#### BOOSTED TREE(XGBOOST) MODEL ####
+
+library(xgboost)
+xgb_spec <- 
+  boost_tree() %>% 
+  set_engine("xgboost") %>% 
+  set_mode("classification") 
+xgb_spec
+
+#### K NEAREST NEIGHBOUR MODEL ####
+
+knn_spec <- 
+  nearest_neighbor(neighbors = 4) %>% # we can adjust the number of neighbors 
+  set_engine("kknn") %>% 
+  set_mode("classification") 
+knn_spec
+
+#### NEURAL NETWORK MODEL #####
+
+library(keras)
+nnet_spec<-
+  mlp() %>%
+  set_mode("classification") %>% 
+  set_engine("keras", verbose = 0) 
+nnet_spec
+
+
+
+############### Create Workflow ###############
+
+
+
+
+#### Logistic Regression Workflow ####
+
+logistic_wflow <-               # Logistic workflow object
+  workflow() %>%                # use workflow function
+  add_recipe(churn_recipe) %>%  # use the new recipe
+  add_model(logistic_spec)      # add logistic model spec
+
+# show object
+logistic_wflow
+
+######## Random Forest Workflow  #########
+
+rndmfrst_wflow <-                # Random Forest workflow object
+  workflow() %>%                # use workflow function
+  add_recipe(churn_recipe) %>%  # use the new recipe
+  add_model(rndmfrst_spec)      # add Random Forest model spec
+rndmfrst_wflow
+
+######## Boosted Tree (XGBOOST) Workflow #########
+
+xgb_wflow <-                     # Boosted Tree workflow object
+  workflow() %>%                # use workflow function
+  add_recipe(churn_recipe) %>%  # use the new recipe
+  add_model(xgb_spec)           # add Boosted Tree model spec
+xgb_wflow
+
+######## K NEAREST NEIGHBOUR Workflow  #########
+
+knn_wflow <-                     # Knn workflow object
+  workflow() %>%                # use workflow function
+  add_recipe(churn_recipe) %>%  # use the new recipe
+  add_model(knn_spec)           # add Knn model spec
+knn_wflow
+
+######## Neural Network Workflow  #########
+
+nnet_wflow <-                   # Neural Network workflow object
+  workflow() %>%                # use workflow function
+  add_recipe(churn_recipe) %>%  # use the new recipe
+  add_model(nnet_spec)          # add Knn model spec
+nnet_wflow
+
+
+
+############### Evaluation of the Models ###############
+
+# Write a Function to extract the results from the performance metrics
+
+######## Logistic model Evaluation #########
+
+get_model <- function(x) {
+                          pull_workflow_fit(x) %>% 
+                          tidy()
+                         }
+
+logistic_result <- 
+  logistic_wflow %>% 
+  fit_resamples(
+                resamples = churn_cv,       # Cross Validation
+                metrics = metric_set(recall, precision, f_meas,accuracy,kap,roc_auc,yardstick::sens,yardstick::spec ),
+                control = control_resamples(
+                save_pred = TRUE,
+                extract = get_model)
+                ) 
+logistic_result %>%  collect_metrics(summarize = TRUE)
+logistic_result %>%  collect_metrics(summarize = FALSE)
+
+logistic_result$.extracts[[1]][[1]]
+all_coef <- map_dfr(logistic_result$.extracts, ~ .x[[1]][[1]])
+filter(all_coef, term == "Monthly.Charges")
+
+logistic_pred <- logistic_result %>%
+                 collect_predictions()
+
+logistic_pred %>% 
+  conf_mat(Churn.Value, .pred_class)%>% 
+  autoplot(type = "heatmap")
+
+logistic_pred %>% 
+  group_by(id) %>% # id contains our folds
+  roc_curve(Churn.Value,.pred_class) %>% 
+  autoplot()
+
+############ To be Continued ##########
+
+# log_res_2 <- 
+#   log_wflow %>% 
+#   fit_resamples(
+#                 resamples = cv_folds, 
+#                 metrics = metric_set(
+#                                      recall, precision, f_meas,accuracy,kap,roc_auc, sens, spec),
+#                 control = control_resamples(
+#                 save_pred = TRUE,
+#                 extract = get_model) # use extract and our new function
+#   ) 
