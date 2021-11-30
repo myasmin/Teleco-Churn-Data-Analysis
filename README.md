@@ -8,10 +8,8 @@ Tableau Data Viz - https://public.tableau.com/app/profile/mahmuda.yasmin/viz/Tel
 
 ## The Dataset is an Imbalanced Two-Class Classification Problem. 
 
-The predefined models I selected while working with R to find the right model didn't perform very well. After a pretty hefty coding with the 'tidymodels' library, I tried to run the model with Azure Machine Learning Designer Resource. Using the AutoML Feature, the **MaxAbsScaler, LightGBM** (Weighted AUC = 0.98750) showed as the best fit for this data. I am so happy to get the cloud based- high speed computation privilage (AZURE ML STUDIO) from Microsoft while using the free learner's opportunity! I wish they would have given me the same privilage for the Azure Databricks usage too!
+The predefined models I selected while working with R to find the right model didn't perform very well.
 
-Life gets to easy sometimes, eh!! 
-
-Working on a detailed report and analysis, as well as the deploy Python code too.
+After a pretty hefty coding with the 'tidymodels' library, I tried to run the model with Azure Machine Learning Designer Resource. Using the AutoML Feature, the **MaxAbsScaler, LightGBM** (Weighted AUC = 0.98750) showed as the best fit for this data.
 
 Happy Machine Learning!!
