@@ -4,7 +4,7 @@ Download and Dataset Details - https://www.kaggle.com/yeanzc/telco-customer-chur
 
 Tools and software Packages - PowerBI, Tableau, R, AzureMLStudio.
 
-Tableau Data Viz (Still working on it to figure out how to build the dashboard as I did using Power BI) - https://public.tableau.com/views/TelecoChurnDataAnalysis/MonthlyChargevsChurnLabel?:language=en-US&publish=yes&:display_count=n&:origin=viz_share_link
+Tableau Data Viz - https://public.tableau.com/app/profile/mahmuda.yasmin/viz/TelecoChurnDataAnalysis2/Dashboard2
 
 ## The Dataset is an Imbalanced Two-Class Classification Problem. 
 
