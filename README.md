@@ -2,7 +2,7 @@
 
 Download and Dataset Details - https://www.kaggle.com/yeanzc/telco-customer-churn-ibm-dataset.
 
-Tools and software Packages - PowerBI, Tableau, R, AzureMLStudio.
+Tools and software Packages - PowerBI, Tableau, R.
 
 Tableau Data Viz - https://public.tableau.com/app/profile/mahmuda.yasmin/viz/TelecoChurnDataAnalysis2/Dashboard2
 
